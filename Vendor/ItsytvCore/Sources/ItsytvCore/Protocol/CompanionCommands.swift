@@ -1,0 +1,278 @@
+import Foundation
+import os.log
+
+private let log = CoreLog(category: "Commands")
+
+/// HID button values for the Companion protocol `_hidC` command.
+public enum CompanionButton: Int64 {
+    case up = 1
+    case down = 2
+    case left = 3
+    case right = 4
+    case menu = 5
+    case select = 6
+    case home = 7
+    case volumeUp = 8
+    case volumeDown = 9
+    case siri = 10
+    case screensaver = 11
+    case sleep = 12
+    case wake = 13
+    case playPause = 14
+    case channelUp = 15
+    case channelDown = 16
+    case guide = 17
+    case pageUp = 18
+    case pageDown = 19
+}
+
+public enum InputAction {
+    case click
+    case doubleClick
+    case hold
+}
+
+public enum SwipeDirection {
+    case up, down, left, right
+}
+
+/// High-level command helpers for the Companion protocol.
+extension CompanionConnection {
+
+    /// Send a single button press (down + up) with configurable hold duration.
+    func pressButton(_ button: CompanionButton, holdDuration: TimeInterval = 0.05, completion: ((Swift.Error?) -> Void)? = nil) {
+        sendButtonDown(button)
+        DispatchQueue.main.asyncAfter(deadline: .now() + holdDuration) { [weak self] in
+            self?.sendButtonUp(button, completion: completion)
+        }
+    }
+
+    /// Send a double-tap: two rapid press/release cycles.
+    func doubleTapButton(_ button: CompanionButton, completion: ((Swift.Error?) -> Void)? = nil) {
+        sendButtonDown(button)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.sendButtonUp(button)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                self?.sendButtonDown(button)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                    self?.sendButtonUp(button, completion: completion)
+                }
+            }
+        }
+    }
+
+    /// Send a hold press: down, wait 1 second, up.
+    func holdButton(_ button: CompanionButton, duration: TimeInterval = 1.0, completion: ((Swift.Error?) -> Void)? = nil) {
+        sendButtonDown(button)
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
+            self?.sendButtonUp(button, completion: completion)
+        }
+    }
+
+    private func sendButtonDown(_ button: CompanionButton) {
+        sendRequest(eventName: "_hidC", content: .dictionary([
+            ("_hBtS", .int(1)),
+            ("_hidC", .int(button.rawValue)),
+        ]))
+    }
+
+    private func sendButtonUp(_ button: CompanionButton, completion: ((Swift.Error?) -> Void)? = nil) {
+        sendRequest(eventName: "_hidC", content: .dictionary([
+            ("_hBtS", .int(2)),
+            ("_hidC", .int(button.rawValue)),
+        ]), completion: completion)
+    }
+
+    /// Start a companion session. Must be called after pair-verify before other commands.
+    func startSession(completion: @escaping (Int64?) -> Void) {
+        let localSID = Int64.random(in: 0...Int64(UInt32.max))
+        log.debug("Starting session with local SID=\(localSID)")
+        sendRequest(
+            eventName: "_sessionStart",
+            content: .dictionary([
+                ("_srvT", .string("com.apple.tvremoteservices")),
+                ("_sid", .int(localSID)),
+            ]),
+            responseHandler: { response in
+                if let content = response["_c"],
+                   let remoteSID = content["_sid"]?.intValue {
+                    let fullSID = (remoteSID << 32) | localSID
+                    log.info("Session started: remoteSID=\(remoteSID) fullSID=0x\(String(fullSID, radix: 16))")
+                    completion(fullSID)
+                } else {
+                    log.warning("Session start response missing _sid")
+                    completion(nil)
+                }
+            }
+        )
+    }
+
+    /// Send `_systemInfo` to the Apple TV. The reply carries `_osV` (and a
+    /// large grab-bag of device metadata we don't currently need) — we only
+    /// use the version field to drive empty-state copy on tvOS 26.5 beta,
+    /// which breaks `FetchLaunchableApplicationsEvent`.
+    ///
+    /// Field formats mirror pyatv's `_systemInfo` request so the device
+    /// accepts our identity payload.
+    func sendSystemInfo(
+        clientID: String,
+        clientPublicKey: Data,
+        deviceModel: String,
+        responseHandler: @escaping (OPACK.Value) -> Void
+    ) {
+        let stripped = clientID.replacingOccurrences(of: "-", with: "").lowercased()
+        let rpID = stripped.count >= 12
+            ? String(stripped.prefix(12))
+            : stripped + String(repeating: "0", count: 12 - stripped.count)
+        let macBytes = clientPublicKey.prefix(6)
+        let macSrc: [UInt8] = macBytes.count == 6
+            ? Array(macBytes)
+            : Array(macBytes) + Array(repeating: UInt8(0), count: 6 - macBytes.count)
+        let pubID = macSrc.map { String(format: "%02X", $0) }.joined(separator: ":")
+        sendRequest(
+            eventName: "_systemInfo",
+            content: .dictionary([
+                ("_bf", .int(0)),
+                ("_cf", .int(512)),
+                ("_clFl", .int(128)),
+                ("_i", .string(rpID)),
+                ("_idsID", .string(clientID)),
+                ("_pubID", .string(pubID)),
+                ("_sf", .int(256)),
+                ("_sv", .string("170.18")),
+                ("model", .string(deviceModel)),
+                ("name", .string("TV Remote")),
+            ]),
+            responseHandler: responseHandler
+        )
+    }
+
+    /// Register a TV Remote Control session. Required precondition for
+    /// tvOS 26.5+ to serve `FetchLaunchableApplicationsEvent` and
+    /// `FetchAttentionState`; without this call the launcher daemon
+    /// silently drops those requests. Older tvOS either responds with empty
+    /// content or ignores it — either way the rest of the flow keeps working.
+    ///
+    /// Discovered by pyatv: https://github.com/postlund/pyatv/pull/2847
+    func startTVRCSession(completion: @escaping () -> Void) {
+        sendRequest(
+            eventName: "TVRCSessionStart",
+            content: .dictionary([
+                ("ProtocolVersionKey", .string("1.2")),
+            ]),
+            responseHandler: { _ in completion() }
+        )
+    }
+
+    /// Compatibility wrapper; use fetchLaunchableApps for explicit failures.
+    func fetchApps(completion: @escaping ([(bundleID: String, name: String)]) -> Void) {
+        fetchLaunchableApps { result in
+            switch result {
+            case .success(let apps): completion(apps)
+            case .failure(let error): log.warning("App listing failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Compatibility wrapper; completion now describes the protocol response.
+    func launchApp(bundleID: String, completion: ((Swift.Error?) -> Void)? = nil) {
+        requestAppLaunch(bundleID: bundleID) { result in
+            switch result {
+            case .success: completion?(nil)
+            case .failure(let error):
+                log.warning("App launch failed: \(error.localizedDescription)")
+                completion?(error)
+            }
+        }
+    }
+
+    /// Start a text input session. The response contains a session UUID and current text.
+    func startTextInput(responseHandler: @escaping (OPACK.Value) -> Void) {
+        sendRequest(eventName: "_tiStart", content: .dict([]), responseHandler: responseHandler)
+    }
+
+    /// Stop the current text input session.
+    func stopTextInput(responseHandler: ((OPACK.Value) -> Void)? = nil) {
+        sendRequest(eventName: "_tiStop", content: .dict([]), responseHandler: responseHandler)
+    }
+
+    /// Send a text input event (insert text) for the given session.
+    func sendTextInputEvent(_ text: String, sessionUUID: Data, completion: ((Swift.Error?) -> Void)? = nil) {
+        let payload = TextInputSession.encodeInsertText(text, sessionUUID: sessionUUID)
+        sendEvent(name: "_tiC", content: .dictionary([
+            ("_tiV", .int(1)),
+            ("_tiD", .data(payload)),
+        ]), completion: completion)
+    }
+
+    // MARK: - Touch events (_hidT)
+
+    /// Touch phase values matching the Companion protocol.
+    enum TouchPhase: Int64 {
+        case press = 1
+        case hold = 3
+        case release = 4
+    }
+
+    /// Initialize the virtual touchpad. Must be called once before sending touch events.
+    func startTouchSession(completion: ((Swift.Error?) -> Void)? = nil) {
+        log.info("Starting touch session (1000x1000)")
+        touchBaseTimestamp = ProcessInfo.processInfo.systemUptime
+        sendRequest(eventName: "_touchStart", content: .dictionary([
+            ("_width", .float64(1000.0)),
+            ("_height", .float64(1000.0)),
+            ("_tFl", .int(0)),
+        ]), completion: completion)
+    }
+
+    /// Send a single touch event at the given coordinates (0–1000 range).
+    func sendTouchEvent(x: Int64, y: Int64, phase: TouchPhase) {
+        let ns = Int64((ProcessInfo.processInfo.systemUptime - touchBaseTimestamp) * 1_000_000_000)
+        sendEvent(name: "_hidT", content: .dictionary([
+            ("_ns", .int(ns)),
+            ("_tFg", .int(1)),
+            ("_cx", .float64(Double(x))),
+            ("_tPh", .int(phase.rawValue)),
+            ("_cy", .float64(Double(y))),
+        ]))
+    }
+
+    /// Send a swipe gesture as a sequence of touch events over time.
+    func sendSwipe(
+        startX: Int64, startY: Int64,
+        endX: Int64, endY: Int64,
+        durationMs: Int = 250,
+        completion: ((Swift.Error?) -> Void)? = nil
+    ) {
+        log.warning("swipe: (\(startX),\(startY)) → (\(endX),\(endY)) duration=\(durationMs)ms")
+        sendTouchEvent(x: startX, y: startY, phase: .press)
+
+        let stepMs = 16 // ~60fps, matching pyatv
+        let steps = durationMs / stepMs
+
+        for i in 1...steps {
+            let fraction = Double(i) / Double(steps)
+            let cx = Int64(Double(startX) + fraction * Double(endX - startX))
+            let cy = Int64(Double(startY) + fraction * Double(endY - startY))
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i * stepMs) / 1000.0) { [weak self] in
+                if i < steps {
+                    self?.sendTouchEvent(x: cx, y: cy, phase: .hold)
+                } else {
+                    self?.sendTouchEvent(x: cx, y: cy, phase: .release)
+                    completion?(nil)
+                }
+            }
+        }
+    }
+
+    /// Atomically clear and replace the text field (single event, no flash).
+    func replaceTextInputEvent(_ text: String, sessionUUID: Data, completion: ((Swift.Error?) -> Void)? = nil) {
+        let payload = TextInputSession.encodeReplaceText(text, sessionUUID: sessionUUID)
+        sendEvent(name: "_tiC", content: .dictionary([
+            ("_tiV", .int(1)),
+            ("_tiD", .data(payload)),
+        ]), completion: completion)
+    }
+
+}

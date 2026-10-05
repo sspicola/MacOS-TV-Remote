@@ -1,0 +1,3 @@
+Vendor/** linguist-vendored
+Vendor/ItsytvCore/Sources/ItsytvCore/MRP/Proto/Generated/** linguist-generated
+Vendor/ItsytvCore/ThirdPartyLicenses/** -whitespace

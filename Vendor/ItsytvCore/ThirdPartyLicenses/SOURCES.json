@@ -1,0 +1,124 @@
+{
+  "rootLockfile": "Package.resolved",
+  "files": [
+    {
+      "package": "big-num",
+      "version": "2.0.3",
+      "revision": "9059dcab8dd001b8143bc512b4477d079e97957f",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/adam-fowler/big-num/9059dcab8dd001b8143bc512b4477d079e97957f/LICENSE",
+      "file": "big-num/LICENSE",
+      "sha256": "8b54814d9042aef74a4ceee4d4e6a569720be8e544bd089e278d4537d02740fd",
+      "bytes": 1068
+    },
+    {
+      "package": "swift-asn1",
+      "version": "1.7.3",
+      "revision": "3b6410f7dee09eb33cdd26260c5fd47fda19b0e2",
+      "path": "LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/apple/swift-asn1/3b6410f7dee09eb33cdd26260c5fd47fda19b0e2/LICENSE.txt",
+      "file": "swift-asn1/LICENSE.txt",
+      "sha256": "8c6db340475136df3c1201d458fa5755698eace76e510471ecc9d857d6083dac",
+      "bytes": 11359
+    },
+    {
+      "package": "swift-asn1",
+      "version": "1.7.3",
+      "revision": "3b6410f7dee09eb33cdd26260c5fd47fda19b0e2",
+      "path": "NOTICE.txt",
+      "url": "https://raw.githubusercontent.com/apple/swift-asn1/3b6410f7dee09eb33cdd26260c5fd47fda19b0e2/NOTICE.txt",
+      "file": "swift-asn1/NOTICE.txt",
+      "sha256": "11dd3b3b783e6ec26098dd38ebc962986ea109b85447e28e62867b83bd0f8c5b",
+      "bytes": 1450
+    },
+    {
+      "package": "swift-crypto",
+      "version": "4.5.2",
+      "revision": "da9d28d69ebe3894b18376c8f2395c2f37b8448f",
+      "path": "LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/apple/swift-crypto/da9d28d69ebe3894b18376c8f2395c2f37b8448f/LICENSE.txt",
+      "file": "swift-crypto/LICENSE.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358
+    },
+    {
+      "package": "swift-crypto",
+      "version": "4.5.2",
+      "revision": "da9d28d69ebe3894b18376c8f2395c2f37b8448f",
+      "path": "NOTICE.txt",
+      "url": "https://raw.githubusercontent.com/apple/swift-crypto/da9d28d69ebe3894b18376c8f2395c2f37b8448f/NOTICE.txt",
+      "file": "swift-crypto/NOTICE.txt",
+      "sha256": "b3ddc2ae068e76b3beb71be03c0400f90090f9469aa491bf7b1ac42320af37b8",
+      "bytes": 1563
+    },
+    {
+      "package": "swift-protobuf",
+      "version": "1.38.1",
+      "revision": "55d7a1cc5666b85c13464aea1c4b4a90feccb4c8",
+      "path": "LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/apple/swift-protobuf/55d7a1cc5666b85c13464aea1c4b4a90feccb4c8/LICENSE.txt",
+      "file": "swift-protobuf/LICENSE.txt",
+      "sha256": "186c5f0192a754714a7e542233ddaaad28745626e0ad32e358d3f5af00afb84a",
+      "bytes": 11757
+    },
+    {
+      "package": "swift-protobuf",
+      "version": "1.38.1",
+      "revision": "55d7a1cc5666b85c13464aea1c4b4a90feccb4c8",
+      "path": "Sources/protobuf/abseil/LICENSE",
+      "url": "https://raw.githubusercontent.com/apple/swift-protobuf/55d7a1cc5666b85c13464aea1c4b4a90feccb4c8/Sources/protobuf/abseil/LICENSE",
+      "file": "swift-protobuf/Sources/protobuf/abseil/LICENSE",
+      "sha256": "c79a7fea0e3cac04cd43f20e7b648e5a0ff8fa5344e644b0ee09ca1162b62747",
+      "bytes": 11361
+    },
+    {
+      "package": "swift-protobuf",
+      "version": "1.38.1",
+      "revision": "55d7a1cc5666b85c13464aea1c4b4a90feccb4c8",
+      "path": "Sources/protobuf/protobuf/LICENSE",
+      "url": "https://raw.githubusercontent.com/apple/swift-protobuf/55d7a1cc5666b85c13464aea1c4b4a90feccb4c8/Sources/protobuf/protobuf/LICENSE",
+      "file": "swift-protobuf/Sources/protobuf/protobuf/LICENSE",
+      "sha256": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d",
+      "bytes": 1732
+    },
+    {
+      "package": "swift-protobuf",
+      "version": "1.38.1",
+      "revision": "55d7a1cc5666b85c13464aea1c4b4a90feccb4c8",
+      "path": "Sources/protobuf/protobuf/third_party/utf8_range/LICENSE",
+      "url": "https://raw.githubusercontent.com/apple/swift-protobuf/55d7a1cc5666b85c13464aea1c4b4a90feccb4c8/Sources/protobuf/protobuf/third_party/utf8_range/LICENSE",
+      "file": "swift-protobuf/Sources/protobuf/protobuf/third_party/utf8_range/LICENSE",
+      "sha256": "02de69b64fc36d9e938f418e52723e42f0b2b226d58a9cb3c8dcbdf7059f5074",
+      "bytes": 1091
+    },
+    {
+      "package": "swift-srp",
+      "version": "2.4.0",
+      "revision": "1345dfeff4d1bc54fc36257325371df3d1d7a813",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/adam-fowler/swift-srp/1345dfeff4d1bc54fc36257325371df3d1d7a813/LICENSE",
+      "file": "swift-srp/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "bytes": 11357
+    },
+    {
+      "package": "BoringSSL (vendored by big-num)",
+      "revision": "295b31324f8c557dcd3c1c831857e33a7f23bc52",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/google/boringssl/295b31324f8c557dcd3c1c831857e33a7f23bc52/LICENSE",
+      "file": "big-num/BoringSSL-LICENSE",
+      "provenance": "https://github.com/adam-fowler/big-num/blob/9059dcab8dd001b8143bc512b4477d079e97957f/Sources/CBigNumBoringSSL/hash.txt",
+      "sha256": "60bd7c54856bf9387221bde5ab55d516d7cea15870d0fed69406bcd1c8ec7c9d",
+      "bytes": 12517
+    },
+    {
+      "package": "pyatv (protocol source acknowledged by ItsytvCore)",
+      "revision": "b277a4c8222ecdcbaab8a24e3e713ca44765adb4",
+      "path": "LICENSE.md",
+      "url": "https://raw.githubusercontent.com/postlund/pyatv/b277a4c8222ecdcbaab8a24e3e713ca44765adb4/LICENSE.md",
+      "file": "pyatv/LICENSE.md",
+      "sha256": "d0c63aa9cb294775307a24a74002eec55be1b206b3da84034c960a319fb063e3",
+      "bytes": 1081
+    }
+  ]
+}
