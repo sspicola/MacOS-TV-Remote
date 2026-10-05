@@ -1,7 +1,9 @@
 # Releasing TV Remote
 
-Use Xcode 26 or later, or Command Line Tools with Swift 6.2 or later. The app
-runs on macOS 14 or later. GitHub Actions tests on Apple silicon and Intel Macs.
+Use Xcode 26 for universal releases. Newer toolchains may omit the Intel
+compatibility libraries. Set `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`
+when Command Line Tools are selected and you want to use that Xcode installation.
+The app runs on macOS 14 or later. GitHub Actions tests on Apple silicon and Intel Macs.
 
 1. Update both version fields in `Resources/Info.plist` and add release notes in `docs/releases/`.
 2. Run `./scripts/test.sh`. With full Xcode, also run the vendored suite:

@@ -26,6 +26,9 @@ for architecture in "${architectures[@]}"; do
         -Xcc "-ffile-prefix-map=$project_dir=."
         -Xswiftc -file-prefix-map -Xswiftc "$project_dir=."
         --scratch-path "$project_dir/.build/app-$architecture")
+    if [[ "$configuration" == release ]]; then
+        build_args+=(-debug-info-format none)
+    fi
     swift build "${build_args[@]}"
     binary_dir="$(swift build "${build_args[@]}" --show-bin-path)"
     binaries+=("$binary_dir/TVRemote")
@@ -51,6 +54,7 @@ ditto --norsrc --noextattr Vendor/ItsytvCore/ThirdPartyLicenses "$bundle/Content
 mkdir -p "$bundle/Contents/Resources/Licenses/ItsytvCore"
 cp Vendor/ItsytvCore/LICENSE "$bundle/Contents/Resources/Licenses/ItsytvCore/"
 plutil -lint "$bundle/Contents/Info.plist"
+chmod -R u+w "$bundle"
 xattr -cr "$bundle"
 signing_args=(--force --sign "$identity" --identifier com.sam.TVRemote)
 if [[ "$identity" != - ]]; then
