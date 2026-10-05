@@ -15,7 +15,7 @@ fi
 
 ARCHS="arm64 x86_64" CONFIGURATION=release OUTPUT_DIR="$staging_dir" ./scripts/build-app.sh
 bundle="$staging_dir/TV Remote.app"
-lipo -verify_arch arm64 x86_64 "$bundle/Contents/MacOS/TVRemote"
+lipo "$bundle/Contents/MacOS/TVRemote" -verify_arch arm64 x86_64
 ditto -c -k --sequesterRsrc --keepParent "$bundle" "$staging_dir/$archive"
 
 if [[ -n "${NOTARYTOOL_PROFILE:-}" ]]; then
@@ -39,7 +39,7 @@ fi
 mkdir "$staging_dir/extracted"
 ditto -x -k "$staging_dir/$archive" "$staging_dir/extracted"
 codesign --verify --strict "$staging_dir/extracted/TV Remote.app"
-lipo -verify_arch arm64 x86_64 "$staging_dir/extracted/TV Remote.app/Contents/MacOS/TVRemote"
+lipo "$staging_dir/extracted/TV Remote.app/Contents/MacOS/TVRemote" -verify_arch arm64 x86_64
 mkdir -p dist
 cp "$staging_dir/$archive" "dist/$archive"
 (cd dist && shasum -a 256 "$archive" > "$archive.sha256")
