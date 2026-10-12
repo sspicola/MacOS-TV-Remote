@@ -35,6 +35,11 @@ struct RemoteView: View {
                     discoveryView
                 } else {
                     connectionNotice
+                    if model.textInput != nil {
+                        Button("Type on TV", systemImage: "keyboard") { model.showKeyboard() }
+                            .controlSize(.large)
+                            .frame(maxWidth: .infinity)
+                    }
                     if model.canSend, model.screen == .apps {
                         AppsView(model: model)
                     } else {
@@ -125,7 +130,7 @@ struct RemoteView: View {
                         .frame(width: 62, height: 62)
                 }
                 .buttonStyle(RemoteControlStyle(circular: true, filled: true))
-                .keyboardShortcut(.return, modifiers: [])
+                .remoteShortcut(.return, enabled: !model.isKeyboardPresented)
                 .help("Select · Return")
                 .accessibilityLabel("Select")
             }
@@ -137,7 +142,7 @@ struct RemoteView: View {
                 actionButton("Back", symbol: "chevron.left", command: .back)
                 actionButton("Home", symbol: "house", command: .home)
                 actionButton("Play / pause", symbol: "playpause.fill", command: .playPause)
-                    .keyboardShortcut(.space, modifiers: [])
+                    .remoteShortcut(.space, enabled: !model.isKeyboardPresented)
                     .help("Play or pause · Space")
             }
 
@@ -166,7 +171,7 @@ struct RemoteView: View {
                 .contentShape(Circle())
         }
         .buttonStyle(RemoteControlStyle(circular: true, filled: false))
-        .keyboardShortcut(key, modifiers: [])
+        .remoteShortcut(key, enabled: !model.isKeyboardPresented)
         .accessibilityLabel(title)
         .help("\(title) · Arrow key")
     }
@@ -437,5 +442,12 @@ private struct RemoteControlStyle: ButtonStyle {
             }
             return .clear
         }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func remoteShortcut(_ key: KeyEquivalent, enabled: Bool) -> some View {
+        if enabled { keyboardShortcut(key, modifiers: []) } else { self }
     }
 }

@@ -113,8 +113,8 @@ public final class AppleTVManager {
     private var connectedDevice: AppleTVDevice?
 
     /// Text input session state — kept alive while connected.
-    private var textInputSessionUUID: Data?
-    private var sentText = ""
+    private var keyboardState = CompanionKeyboardState()
+    public var textInput: AppleTVTextInput? { keyboardState.session }
     private var pendingCompanionCommands: [() -> Void] = []
     private var mrpRetryCount = 0
     private static let maxMRPRetries = 3
@@ -127,8 +127,8 @@ public final class AppleTVManager {
     private var sessionGeneration: UInt64 = 0
 
     /// Call lifecycle and command methods on the main thread.
-    /// Disable Media Remote for a minimal Companion button remote: no MRP,
-    /// application list, touch session, or keyboard listener is started.
+    /// Disable Media Remote to skip MRP, automatic app fetching, and touch setup.
+    /// Companion keyboard focus events remain available.
     public init(enableMediaRemote: Bool = true) {
         self.enableMediaRemote = enableMediaRemote
     }
@@ -236,9 +236,8 @@ public final class AppleTVManager {
         partialCredentials = nil
         pendingM2 = nil
         pendingPairVerify = nil
-        textInputSessionUUID = nil
+        keyboardState.reset()
         keyboardFocused = false
-        sentText = ""
         mrpRetryCount = 0
         companionRetryCount = 0
         isReconnecting = false
@@ -443,51 +442,53 @@ public final class AppleTVManager {
         }
     }
 
-    /// Update the Apple TV text field to match `newText`.
-    ///
-    /// Sends only the diff: appends new characters when typing forward,
-    /// or clears and re-types when characters are deleted (backspace).
-    public func updateRemoteText(_ newText: String) {
-        guard let connection else { return }
-
-        let ensureSession: (@escaping (Data) -> Void) -> Void = { [weak self] handler in
-            if let uuid = self?.textInputSessionUUID {
-                handler(uuid)
+    /// Replace text only in the field identified by this session UUID.
+    /// Completion confirms the socket write; Companion sends no text acknowledgement.
+    public func replaceText(_ text: String, sessionID: Data,
+                            completion: @escaping (Result<Void, Swift.Error>) -> Void) {
+        guard connectionStatus == .connected, let conn = connection,
+              textInput?.id == sessionID else {
+            completion(.failure(AppleTVTextInputError.fieldClosed))
+            return
+        }
+        let generation = sessionGeneration
+        var completed = false
+        let finish: (Result<Void, Swift.Error>) -> Void = { [weak self, weak conn] result in
+            guard !completed else { return }
+            completed = true
+            guard let self, self.isCurrent(conn, generation: generation),
+                  self.textInput?.id == sessionID else {
+                completion(.failure(AppleTVTextInputError.fieldClosed))
                 return
             }
-            connection.stopTextInput { _ in
-                connection.startTextInput { response in
-                    guard let content = response["_c"],
-                          let tiData = content["_tiD"]?.dataValue,
-                          let result = try? TextInputSession.decodeStartResponse(tiData) else {
-                        log.debug("No active text field")
-                        return
-                    }
-                    self?.textInputSessionUUID = result.sessionUUID
-                    handler(result.sessionUUID)
-                }
-            }
+            completion(result)
         }
-
-        ensureSession { [weak self] uuid in
-            guard let self else { return }
-            if newText.hasPrefix(self.sentText) {
-                // Typed forward — send only the new characters
-                let added = String(newText.dropFirst(self.sentText.count))
-                if !added.isEmpty {
-                    connection.sendTextInputEvent(added, sessionUUID: uuid)
-                }
-            } else {
-                // Backspace or edit — atomic clear + replace in one event
-                connection.replaceTextInputEvent(newText, sessionUUID: uuid)
-            }
-            self.sentText = newText
+        let deadline = DispatchWorkItem { finish(.failure(AppleTVTextInputError.timedOut)) }
+        conn.replaceTextInputEvent(text, sessionUUID: sessionID) { error in
+            deadline.cancel()
+            if let error { finish(.failure(error)) } else { finish(.success(())) }
         }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: deadline)
     }
 
-    /// Reset local text tracking (call when closing keyboard).
+    public func updateRemoteText(_ newText: String) {
+        guard let input = textInput else { return }
+        replaceText(newText, sessionID: input.id) { _ in }
+    }
+
     public func resetTextInputState() {
-        sentText = ""
+        keyboardState.reset()
+        keyboardFocused = false
+    }
+
+    private func startKeyboardListener(_ conn: CompanionConnection, generation: UInt64) {
+        let revision = keyboardState.revision
+        conn.sendRequestAwaitingResponse(eventName: "_tiStart", content: .dictionary([])) { [weak self, weak conn] result in
+            guard let self, self.isCurrent(conn, generation: generation),
+                  case .success(let response) = result else { return }
+            self.keyboardState.receiveInitial(response["_c"], revision: revision)
+            self.keyboardFocused = self.textInput != nil
+        }
     }
 
     private func applyTouchTranslation(_ translation: CGPoint) {
@@ -810,8 +811,8 @@ public final class AppleTVManager {
             let canReconnect = self.currentCredentials != nil &&
                 (self.connectionStatus == .connected || self.isReconnecting)
             self.connection = nil
-            self.textInputSessionUUID = nil
-            self.sentText = ""
+            self.keyboardState.reset()
+            self.keyboardFocused = false
             if canReconnect && self.companionRetryCount < Self.maxCompanionRetries {
                 self.companionRetryCount += 1
                 self.connectionStatus = .connecting
@@ -838,22 +839,12 @@ public final class AppleTVManager {
             }
             log.info("Session ready, SID=0x\(String(sid, radix: 16))")
             conn.startKeepAlive()
-            if self.enableMediaRemote {
-                conn.startTouchSession()
-                conn.startTextInput { [weak self, weak conn] response in
-                    guard let self, self.isCurrent(conn, generation: generation) else { return }
-                    if let content = response["_c"],
-                       let tiData = content["_tiD"]?.dataValue,
-                       let result = try? TextInputSession.decodeStartResponse(tiData) {
-                        self.textInputSessionUUID = result.sessionUUID
-                    }
-                }
-            }
+            if self.enableMediaRemote { conn.startTouchSession() }
             // Newer tvOS versions expect TVRC registration. Older versions may
             // ignore it, so proceed after two seconds only for this live session.
             var didProceed = false
             let proceed: () -> Void = { [weak self, weak conn] in
-                guard let self, self.isCurrent(conn, generation: generation), !didProceed else { return }
+                guard let self, let conn, self.isCurrent(conn, generation: generation), !didProceed else { return }
                 didProceed = true
                 self.isReconnecting = false
                 self.companionRetryCount = 0
@@ -861,6 +852,7 @@ public final class AppleTVManager {
                 self.discovery.pause()
                 self.isScanning = false
                 self.flushPendingCompanionCommands()
+                self.startKeyboardListener(conn, generation: generation)
                 if self.enableMediaRemote { self.fetchApps() }
             }
             conn.startTVRCSession { proceed() }
@@ -1027,6 +1019,10 @@ public final class AppleTVManager {
         case CompanionMessageType.event.rawValue:
             let eventName = message["_i"]?.stringValue
             log.debug("Event: \(eventName ?? "?")")
+            if let eventName, eventName == "_tiStarted" || eventName == "_tiStopped" {
+                keyboardState.receive(event: eventName, content: message["_c"])
+                keyboardFocused = textInput != nil
+            }
 
         case CompanionMessageType.response.rawValue:
             let xid = message["_x"]?.intValue ?? -1

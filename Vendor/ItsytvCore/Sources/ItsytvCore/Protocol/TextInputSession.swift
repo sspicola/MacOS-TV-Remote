@@ -1,7 +1,4 @@
 import Foundation
-import os.log
-
-private let log = CoreLog(category: "TextInput")
 
 /// Encodes and decodes the binary plist payloads used by the RTI text input protocol.
 ///
@@ -133,7 +130,7 @@ enum TextInputSession {
 
         // Extract sessionUUID from $top
         guard let uuidIdx = uidValue(top["sessionUUID"]),
-              uuidIdx < objects.count else {
+              objects.indices.contains(uuidIdx) else {
             throw Error.missingSessionUUID
         }
 
@@ -148,17 +145,19 @@ enum TextInputSession {
             throw Error.missingSessionUUID
         }
 
+        guard sessionUUID.count == 16 else { throw Error.missingSessionUUID }
+
         // Extract current text from documentState if present
         var currentText = ""
         if let docStateIdx = uidValue(top["documentState"]),
-           docStateIdx < objects.count,
+           objects.indices.contains(docStateIdx),
            let docState = objects[docStateIdx] as? [String: Any],
            let docStIdx = uidValue(docState["docSt"]),
-           docStIdx < objects.count,
+           objects.indices.contains(docStIdx),
            let innerState = objects[docStIdx] as? [String: Any] {
             // Look for contextBeforeInput in the TIDocumentState
             if let textIdx = uidValue(innerState["contextBeforeInput"]),
-               textIdx < objects.count,
+               objects.indices.contains(textIdx),
                let text = objects[textIdx] as? String {
                 currentText = text
             }

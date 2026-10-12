@@ -39,8 +39,8 @@ per-device sessions. Discovery runs independently while each connection attempt
 gets a fresh session manager. The app owns connection and pairing deadlines.
 
 Companion-only sessions support navigation, Select, Back, Home, play/pause,
-volume up/down and explicit app requests. They skip the AirPlay/MRP tunnel,
-automatic app enumeration, virtual touch setup and keyboard listener. Mute
+volume up/down, explicit app requests and keyboard focus events. They skip the
+AirPlay/MRP tunnel, automatic app enumeration and virtual touch setup. Mute
 requires MRP. The optional MRP path has not received a full concurrency audit.
 
 The app stores pairing credentials under Keychain service
@@ -93,10 +93,28 @@ successful launch whose acknowledgment was lost. These semantics follow pyatv's
 [Companion API](https://github.com/postlund/pyatv/blob/master/pyatv/protocols/companion/api.py)
 and [request exchange](https://github.com/postlund/pyatv/blob/master/pyatv/protocols/companion/protocol.py).
 
+## Text input
+
+After TVRC registration, `_tiStart` subscribes to keyboard events and reads any
+field already open. `_tiStarted` and `_tiStopped` update the observable
+`textInput` session. A late subscription reply cannot overwrite a newer focus
+event. Disconnect and reconnect clear the session.
+
+`replaceText(_:sessionID:completion:)` requires the current field's UUID.
+It sends a full replacement through `_tiC` without reopening or retargeting a
+field. Completion reports a socket write, with a five-second deadline; Apple TV
+does not acknowledge text events. The app debounces and serializes writes,
+drops pending edits on field changes, and keeps text out of logs and preferences.
+RTI archive decoding rejects invalid UUID lengths and checks reference bounds.
+
+Focus event handling follows pyatv's
+[Companion keyboard](https://github.com/postlund/pyatv/blob/master/pyatv/protocols/companion/__init__.py)
+and [text subscription](https://github.com/postlund/pyatv/blob/master/pyatv/protocols/companion/api.py).
+
 ## Tests
 
 The upstream suite and local regression tests cover teardown, discovery state,
 request deadlines and cleanup, app response parsing, OPACK bounds and truncated
-handshake payloads. Full XCTest execution requires Xcode; Command Line Tools
+handshake payloads, keyboard focus races, and text editing lifecycle. Full XCTest execution requires Xcode; Command Line Tools
 alone do not include its test runner. Hardware pairing, command
 latency and HDMI-CEC volume still require tests on real Apple TVs.
