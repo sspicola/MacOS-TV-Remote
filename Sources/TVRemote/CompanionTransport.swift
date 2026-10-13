@@ -8,6 +8,7 @@ import RemoteKit
 final class CompanionTransport: RemoteTransport {
     var onDevicesChanged: (([RemoteDevice]) -> Void)?
     var onPhaseChanged: ((RemotePhase) -> Void)?
+    var onTextInputChanged: ((RemoteTextInput?) -> Void)?
     private let scanner = AppleTVManager(enableMediaRemote: false)
     private var session: AppleTVManager?
     private var generation = 0
@@ -57,17 +58,26 @@ final class CompanionTransport: RemoteTransport {
 
     func send(_ command: RemoteCommand) {
         guard let session, session.connectionStatus == .connected else { return }
-        let button: CompanionButton = switch command {
-        case .up: .up
-        case .down: .down
-        case .left: .left
-        case .right: .right
-        case .select: .select
-        case .back: .menu
-        case .home: .home
-        case .playPause: .playPause
-        case .volumeDown: .volumeDown
-        case .volumeUp: .volumeUp
+        let button: CompanionButton
+        switch command {
+        case .up: button = .up
+        case .down: button = .down
+        case .left: button = .left
+        case .right: button = .right
+        case .select: button = .select
+        case .back: button = .menu
+        case .home: button = .home
+        case .playPause: button = .playPause
+        case .volumeDown: button = .volumeDown
+        case .volumeUp: button = .volumeUp
+        case .wake: button = .wake
+        case .sleep: button = .sleep
+        case .skipBackward:
+            session.skipPlayback(by: -10)
+            return
+        case .skipForward:
+            session.skipPlayback(by: 10)
+            return
         }
         session.pressButton(button)
     }
@@ -96,6 +106,18 @@ final class CompanionTransport: RemoteTransport {
         }
     }
 
+    func replaceText(_ text: String, sessionID: Data, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let manager = session, manager.connectionStatus == .connected else {
+            completion(.failure(AppleTVTextInputError.fieldClosed))
+            return
+        }
+        let token = generation
+        manager.replaceText(text, sessionID: sessionID) { [weak self, weak manager] result in
+            guard let self, let manager, token == self.generation, self.session === manager else { return }
+            completion(result)
+        }
+    }
+
     private func observeDevices(token: Int) {
         guard scanning, token == scanGeneration else { return }
         let devices = withObservationTracking {
@@ -110,8 +132,8 @@ final class CompanionTransport: RemoteTransport {
 
     private func observeSession(_ manager: AppleTVManager, token: Int) {
         guard token == generation, session === manager else { return }
-        let status = withObservationTracking {
-            manager.connectionStatus
+        let (status, input) = withObservationTracking {
+            (manager.connectionStatus, manager.textInput)
         } onChange: { [weak self, weak manager] in
             Task { @MainActor [weak self, weak manager] in
                 guard let manager else { return }
@@ -125,6 +147,8 @@ final class CompanionTransport: RemoteTransport {
         case .connected: onPhaseChanged?(.connected)
         case .error(let message): onPhaseChanged?(.failed(message))
         }
+        guard token == generation, session === manager else { return }
+        onTextInputChanged?(input.map { RemoteTextInput(id: $0.id, text: $0.text) })
     }
 }
 
@@ -138,6 +162,7 @@ private enum RemoteAppTransportError: LocalizedError {
 final class DemoTransport: RemoteTransport {
     var onDevicesChanged: (([RemoteDevice]) -> Void)?
     var onPhaseChanged: ((RemotePhase) -> Void)?
+    var onTextInputChanged: ((RemoteTextInput?) -> Void)?
     func startScanning() {
         onDevicesChanged?([
             RemoteDevice(id: "demo-living", name: "Living Room"),
@@ -147,10 +172,20 @@ final class DemoTransport: RemoteTransport {
     }
     func refreshScanning() { startScanning() }
     func stopScanning() {}
-    func connect(to device: RemoteDevice) { onPhaseChanged?(.connected) }
+    func connect(to device: RemoteDevice) {
+        onPhaseChanged?(.connected)
+        if CommandLine.arguments.contains("--demo-keyboard") {
+            onTextInputChanged?(RemoteTextInput(id: Data(UUID().uuidString.utf8), text: ""))
+        }
+    }
     func submitPIN(_ pin: String) {}
     func disconnect() {}
-    func send(_ command: RemoteCommand) {}
+    func send(_ command: RemoteCommand) {
+        if command == .back { onTextInputChanged?(nil) }
+    }
+    func replaceText(_ text: String, sessionID: Data, completion: @escaping (Result<Void, Error>) -> Void) {
+        completion(.success(()))
+    }
     func fetchApps(completion: @escaping (Result<[RemoteApp], Error>) -> Void) {
         completion(.success([
             RemoteApp(id: "com.apple.TVWatchList", name: "Apple TV"),

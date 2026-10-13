@@ -41,10 +41,24 @@ extension CompanionConnection {
 
     /// Send a single button press (down + up) with configurable hold duration.
     func pressButton(_ button: CompanionButton, holdDuration: TimeInterval = 0.05, completion: ((Swift.Error?) -> Void)? = nil) {
+        // Power actions use a single HID release event.
+        if button == .wake || button == .sleep {
+            sendButtonUp(button, completion: completion)
+            return
+        }
         sendButtonDown(button)
         DispatchQueue.main.asyncAfter(deadline: .now() + holdDuration) { [weak self] in
             self?.sendButtonUp(button, completion: completion)
         }
+    }
+
+    func skipPlayback(by seconds: Double) {
+        guard seconds.isFinite, seconds != 0 else { return }
+        sendRequest(eventName: "_mcc", content: .dictionary([
+            ("_mcc", .int(7)),
+            // Companion expects a floating-point interval, including for backward skips.
+            ("_skpS", .float64(seconds)),
+        ]))
     }
 
     /// Send a double-tap: two rapid press/release cycles.

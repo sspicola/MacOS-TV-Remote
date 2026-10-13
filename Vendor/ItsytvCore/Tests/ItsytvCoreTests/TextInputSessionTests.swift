@@ -97,6 +97,74 @@ final class TextInputSessionTests: XCTestCase {
         XCTAssertEqual(extractedText, text)
     }
 
+    func testKeyboardFocusAndInitialReplyOrdering() {
+        let content = OPACK.Value.dictionary([("_tiD", .data(buildStartResponseFixture(
+            sessionUUID: testUUID, contextBefore: "search")))])
+        var state = CompanionKeyboardState()
+        let requestRevision = state.revision
+        state.receive(event: "_tiStarted", content: content)
+        XCTAssertEqual(state.session?.text, "search")
+        state.receiveInitial(nil, revision: requestRevision)
+        XCTAssertEqual(state.session?.id, testUUID)
+        state.receive(event: "_tiStopped", content: content)
+        XCTAssertNil(state.session)
+        state.receiveInitial(content, revision: requestRevision)
+        XCTAssertNil(state.session)
+    }
+
+    func testInitialSubscriptionFindsAnAlreadyFocusedField() {
+        let content = OPACK.Value.dictionary([("_tiD", .data(buildStartResponseFixture(
+            sessionUUID: testUUID, contextBefore: "café 🔎")))])
+        var state = CompanionKeyboardState()
+        state.receiveInitial(content, revision: state.revision)
+        XCTAssertEqual(state.session?.text, "café 🔎")
+        let oldRevision = state.revision
+        state.reset()
+        state.receiveInitial(content, revision: oldRevision)
+        XCTAssertNil(state.session)
+    }
+
+    func testMalformedKeyboardEventClearsPreviousField() {
+        var state = CompanionKeyboardState()
+        state.receive(event: "_tiStarted", content: .dictionary([("_tiD", .data(
+            buildStartResponseFixture(sessionUUID: testUUID, contextBefore: "previous")))]))
+        state.receive(event: "_tiStarted", content: .dictionary([("_tiD", .data(Data([1, 2, 3])))]))
+        XCTAssertNil(state.session)
+    }
+
+    func testInvalidSessionUUIDLengthsAreRejected() {
+        for count in [0, 1, 15, 17] {
+            let fixture = buildStartResponseFixture(sessionUUID: Data(repeating: 1, count: count), contextBefore: "")
+            XCTAssertThrowsError(try TextInputSession.decodeStartResponse(fixture))
+        }
+    }
+
+    func testOutOfBoundsArchiveReferencesDoNotCrash() throws {
+        for index in [-1, 100, Int.max] {
+            var plist = try deserialize(buildStartResponseFixture(sessionUUID: testUUID, contextBefore: ""))
+            plist["$top"] = ["sessionUUID": TextInputSession.uid(index)]
+            let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
+            XCTAssertThrowsError(try TextInputSession.decodeStartResponse(data))
+        }
+    }
+
+    func testInvalidOptionalDocumentReferenceLeavesTextEmpty() throws {
+        var plist = try deserialize(buildStartResponseFixture(sessionUUID: testUUID, contextBefore: ""))
+        plist["$top"] = ["sessionUUID": TextInputSession.uid(6), "documentState": TextInputSession.uid(-1)]
+        let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
+        XCTAssertEqual(try TextInputSession.decodeStartResponse(data).currentText, "")
+    }
+
+    func testWritesWithoutAnActiveFieldFailImmediately() {
+        let manager = AppleTVManager(enableMediaRemote: false)
+        var completed = false
+        manager.replaceText("never sent", sessionID: testUUID) { result in
+            if case .success = result { XCTFail("An inactive field must reject text") }
+            completed = true
+        }
+        XCTAssertTrue(completed)
+    }
+
     // MARK: - Helpers
 
     private func deserialize(_ data: Data) throws -> [String: Any] {

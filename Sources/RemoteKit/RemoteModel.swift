@@ -18,6 +18,18 @@ public final class RemoteModel {
     public private(set) var appLaunchError: String?
     public private(set) var lastLaunchedAppID: String?
 
+    public private(set) var textInput: RemoteTextInput?
+    public private(set) var keyboardText = ""
+    public private(set) var isKeyboardPresented = false
+    public private(set) var keyboardFocusRequest: UInt64 = 0
+    public private(set) var keyboardError: String?
+    public private(set) var isSendingText = false
+
+    @ObservationIgnored private var keyboardGeneration = 0
+    @ObservationIgnored private var keyboardDebounce: Task<Void, Never>?
+    @ObservationIgnored private var writtenText = ""
+    @ObservationIgnored private var hasEditedText = false
+
     public var canSend: Bool { phase == .connected }
 
     @ObservationIgnored private let transport: RemoteTransport
@@ -44,6 +56,7 @@ public final class RemoteModel {
         self.lastSuccessfulID = preferences.string(forKey: "lastConnectedTV")
         transport.onDevicesChanged = { [weak self] devices in self?.updateDevices(devices) }
         transport.onPhaseChanged = { [weak self] phase in self?.receive(phase) }
+        transport.onTextInputChanged = { [weak self] input in self?.receiveTextInput(input) }
     }
 
     public func start() {
@@ -72,6 +85,7 @@ public final class RemoteModel {
         timeoutTask?.cancel()
         acceptsSessionUpdates = false
         resetApps()
+        resetKeyboard()
         transport.disconnect()
         shouldAutoConnect = false
         selectedDevice = device
@@ -101,6 +115,7 @@ public final class RemoteModel {
         timeoutTask?.cancel()
         acceptsSessionUpdates = false
         resetApps()
+        resetKeyboard()
         transport.disconnect()
         shouldAutoConnect = false
         phase = .idle
@@ -177,6 +192,85 @@ public final class RemoteModel {
         }
     }
 
+    public func showKeyboard() {
+        guard canSend, textInput != nil else { return }
+        isKeyboardPresented = true
+        keyboardFocusRequest &+= 1
+    }
+
+    public func dismissKeyboard() {
+        isKeyboardPresented = false
+        flushKeyboardInput()
+    }
+
+    public func editKeyboardText(_ text: String) {
+        guard canSend, textInput != nil, text != keyboardText else { return }
+        keyboardText = text
+        hasEditedText = true
+        keyboardError = nil
+        keyboardDebounce?.cancel()
+        keyboardDebounce = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+            self?.flushKeyboardInput()
+        }
+    }
+
+    public func flushKeyboardInput() {
+        keyboardDebounce?.cancel()
+        keyboardDebounce = nil
+        guard canSend, let input = textInput, !isSendingText,
+              keyboardText != writtenText || keyboardError != nil else { return }
+        let token = keyboardGeneration
+        let text = keyboardText
+        isSendingText = true
+        keyboardError = nil
+        transport.replaceText(text, sessionID: input.id) { [weak self] result in
+            guard let self, self.canSend, self.keyboardGeneration == token else { return }
+            self.isSendingText = false
+            switch result {
+            case .success:
+                self.writtenText = text
+                // Coalesce edits made while the previous socket write was pending.
+                if self.keyboardText != text { self.flushKeyboardInput() }
+            case .failure:
+                self.keyboardError = "Couldn’t send text. Check the TV, then try again."
+                self.isKeyboardPresented = true
+            }
+        }
+    }
+
+    private func receiveTextInput(_ input: RemoteTextInput?) {
+        guard canSend, acceptsSessionUpdates else { return }
+        guard let input else { resetKeyboard(); return }
+        if textInput?.id == input.id {
+            // A repeated focus event must not erase a local edit or reopen a dismissed window.
+            textInput = input
+            if !hasEditedText {
+                keyboardText = input.text
+                writtenText = input.text
+            }
+            return
+        }
+        resetKeyboard()
+        textInput = input
+        keyboardText = input.text
+        writtenText = input.text
+        isKeyboardPresented = true
+    }
+
+    private func resetKeyboard() {
+        keyboardGeneration += 1
+        keyboardDebounce?.cancel()
+        keyboardDebounce = nil
+        textInput = nil
+        keyboardText = ""
+        writtenText = ""
+        hasEditedText = false
+        isSendingText = false
+        keyboardError = nil
+        isKeyboardPresented = false
+    }
+
     private func resetApps() {
         appListRequest += 1
         appLaunchRequest += 1
@@ -236,7 +330,10 @@ public final class RemoteModel {
         guard selectedDevice != nil, acceptsSessionUpdates else { return }
         if phase == .verifying, next == .pairing || next == .connecting { return }
         phase = next
-        if next != .connected { resetApps() }
+        if next != .connected {
+            resetApps()
+            resetKeyboard()
+        }
         switch next {
         case .connected:
             timeoutTask?.cancel()
@@ -270,6 +367,7 @@ public final class RemoteModel {
                 : "Couldn’t connect. Check that your Mac and Apple TV are on the same network, then try again."
             self.acceptsSessionUpdates = false
             self.resetApps()
+            self.resetKeyboard()
             self.transport.disconnect()
             self.phase = .failed(message)
             self.pin = ""

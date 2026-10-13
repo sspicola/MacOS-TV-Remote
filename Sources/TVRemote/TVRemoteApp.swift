@@ -19,6 +19,7 @@ final class RemoteAppDelegate: NSObject, NSApplicationDelegate {
     let model: RemoteModel
     private var workspaceObservers: [NSObjectProtocol] = []
     private var previewWindow: NSWindow?
+    private var keyboardController: KeyboardWindowController?
 
     override init() {
         let isDemo = CommandLine.arguments.contains("--demo")
@@ -28,6 +29,7 @@ final class RemoteAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        keyboardController = KeyboardWindowController(model: model)
         model.start()
         let center = NSWorkspace.shared.notificationCenter
         workspaceObservers.append(center.addObserver(forName: NSWorkspace.willSleepNotification,
