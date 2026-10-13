@@ -104,6 +104,22 @@ struct RemoteView: View {
             }
             .fixedSize()
             .accessibilityElement(children: .combine)
+
+            Menu {
+                Button("Wake Apple TV", systemImage: "power") { model.send(.wake) }
+                Button("Sleep Apple TV", systemImage: "moon") { model.send(.sleep) }
+            } label: {
+                Image(systemName: "power")
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(width: 30, height: 30)
+                    .background(.primary.opacity(0.06), in: Circle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .disabled(!model.canSend)
+            .accessibilityLabel("Apple TV power")
+            .help("Wake or sleep the selected Apple TV")
         }
     }
 

@@ -28,7 +28,8 @@ To check a download, save its `.sha256` file in the same folder and run
 ## Use it
 
 The Remote tab has a directional pad, Select, Back, Home, play/pause, and volume
-buttons. Arrow keys navigate, Return selects, and Space toggles playback while
+buttons. The power button in the top-right corner offers Wake Apple TV and Sleep
+Apple TV. Arrow keys navigate, Return selects, and Space toggles playback while
 this tab is open. Volume commands go through Apple TV to your existing TV and
 audio setup; support depends on that equipment.
 

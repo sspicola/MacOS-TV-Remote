@@ -39,7 +39,7 @@ per-device sessions. Discovery runs independently while each connection attempt
 gets a fresh session manager. The app owns connection and pairing deadlines.
 
 Companion-only sessions support navigation, Select, Back, Home, play/pause,
-volume up/down, explicit app requests and keyboard focus events. They skip the
+volume up/down, wake/sleep, explicit app requests and keyboard focus events. They skip the
 AirPlay/MRP tunnel, automatic app enumeration and virtual touch setup. Mute
 requires MRP. The optional MRP path has not received a full concurrency audit.
 
@@ -65,6 +65,10 @@ No Itsytv credential entries are read or changed.
   rebases Data slices and limits nested containers to 64 levels. Short encrypted
   transport and handshake payloads throw errors. Transport authentication failures
   close the affected connection.
+
+Wake and sleep send a single `_hidC` release event (13 and 12 respectively),
+matching pyatv's [Companion power commands](https://github.com/postlund/pyatv/blob/master/pyatv/protocols/companion/__init__.py).
+The UI offers both actions because it does not track the TV's power state.
 
 ## App requests
 

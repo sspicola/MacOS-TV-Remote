@@ -69,6 +69,8 @@ final class CompanionTransport: RemoteTransport {
         case .playPause: .playPause
         case .volumeDown: .volumeDown
         case .volumeUp: .volumeUp
+        case .wake: .wake
+        case .sleep: .sleep
         }
         session.pressButton(button)
     }
