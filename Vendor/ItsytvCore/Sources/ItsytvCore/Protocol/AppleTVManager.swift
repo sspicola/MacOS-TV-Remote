@@ -292,6 +292,12 @@ public final class AppleTVManager {
         }
     }
 
+    /// Send a relative playback seek over Companion without queuing it for a reconnect.
+    public func skipPlayback(by seconds: Double) {
+        guard connectionStatus == .connected, seconds.isFinite, seconds != 0 else { return }
+        connection?.skipPlayback(by: seconds)
+    }
+
     /// Send a touchpad swipe in the given direction, scaled by travel fraction (0–1).
     public func swipe(_ direction: SwipeDirection, fraction: CGFloat = 0.5) {
         performOrQueueCompanionCommand { [weak self] in

@@ -29,7 +29,9 @@ To check a download, save its `.sha256` file in the same folder and run
 
 The Remote tab has a directional pad, Select, Back, Home, play/pause, and volume
 buttons. The power button in the top-right corner offers Wake Apple TV and Sleep
-Apple TV. Arrow keys navigate, Return selects, and Space toggles playback while
+Apple TV. The buttons beside the directional pad skip back or forward 10 seconds
+during playback. Skipping depends on the app and whether the video allows seeking.
+Arrow keys navigate, Return selects, and Space toggles playback while
 this tab is open. Volume commands go through Apple TV to your existing TV and
 audio setup; support depends on that equipment.
 

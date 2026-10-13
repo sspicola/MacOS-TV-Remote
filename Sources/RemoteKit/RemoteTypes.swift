@@ -49,7 +49,7 @@ public enum AppListState: Equatable, Sendable {
 }
 
 public enum RemoteCommand: String, CaseIterable, Sendable {
-    case up, down, left, right, select, back, home, playPause, volumeDown, volumeUp, wake, sleep
+    case up, down, left, right, select, back, home, playPause, volumeDown, volumeUp, wake, sleep, skipBackward, skipForward
 
     public var label: String {
         switch self {
@@ -65,6 +65,8 @@ public enum RemoteCommand: String, CaseIterable, Sendable {
         case .volumeUp: "Volume up"
         case .wake: "Wake Apple TV"
         case .sleep: "Sleep Apple TV"
+        case .skipBackward: "Skip back 10 seconds"
+        case .skipForward: "Skip forward 10 seconds"
         }
     }
 }

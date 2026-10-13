@@ -125,34 +125,11 @@ struct RemoteView: View {
 
     private var remoteControls: some View {
         VStack(spacing: 18) {
-            ZStack {
-                Circle()
-                    .fill(Color(nsColor: .controlBackgroundColor))
-                    .overlay(Circle().strokeBorder(.primary.opacity(0.055), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.045), radius: 2, y: 1)
-
-                directionButton("Up", symbol: "chevron.up", command: .up, key: .upArrow)
-                    .offset(y: -65)
-                directionButton("Left", symbol: "chevron.left", command: .left, key: .leftArrow)
-                    .offset(x: -65)
-                directionButton("Right", symbol: "chevron.right", command: .right, key: .rightArrow)
-                    .offset(x: 65)
-                directionButton("Down", symbol: "chevron.down", command: .down, key: .downArrow)
-                    .offset(y: 65)
-
-                Button { model.send(.select) } label: {
-                    Text("Select")
-                        .font(.system(size: 12, weight: .medium))
-                        .frame(width: 62, height: 62)
-                }
-                .buttonStyle(RemoteControlStyle(circular: true, filled: true))
-                .remoteShortcut(.return, enabled: !model.isKeyboardPresented)
-                .help("Select · Return")
-                .accessibilityLabel("Select")
+            HStack(spacing: 10) {
+                skipButton(.skipBackward, symbol: "gobackward.10")
+                directionPad
+                skipButton(.skipForward, symbol: "goforward.10")
             }
-            .frame(width: 200, height: 200)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Directional controls")
 
             HStack(spacing: 8) {
                 actionButton("Back", symbol: "chevron.left", command: .back)
@@ -172,6 +149,48 @@ struct RemoteView: View {
         }
         .disabled(!model.canSend)
         .opacity(model.canSend ? 1 : 0.48)
+    }
+
+    private var directionPad: some View {
+        ZStack {
+            Circle()
+                .fill(Color(nsColor: .controlBackgroundColor))
+                .overlay(Circle().strokeBorder(.primary.opacity(0.055), lineWidth: 1))
+                .shadow(color: .black.opacity(0.045), radius: 2, y: 1)
+
+            directionButton("Up", symbol: "chevron.up", command: .up, key: .upArrow)
+                .offset(y: -65)
+            directionButton("Left", symbol: "chevron.left", command: .left, key: .leftArrow)
+                .offset(x: -65)
+            directionButton("Right", symbol: "chevron.right", command: .right, key: .rightArrow)
+                .offset(x: 65)
+            directionButton("Down", symbol: "chevron.down", command: .down, key: .downArrow)
+                .offset(y: 65)
+
+            Button { model.send(.select) } label: {
+                Text("Select")
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 62, height: 62)
+            }
+            .buttonStyle(RemoteControlStyle(circular: true, filled: true))
+            .remoteShortcut(.return, enabled: !model.isKeyboardPresented)
+            .help("Select · Return")
+            .accessibilityLabel("Select")
+        }
+        .frame(width: 200, height: 200)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Directional controls")
+    }
+
+    private func skipButton(_ command: RemoteCommand, symbol: String) -> some View {
+        Button { model.send(command) } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 21, weight: .regular))
+                .frame(width: 44, height: 52)
+        }
+        .buttonStyle(RemoteControlStyle())
+        .accessibilityLabel(command.label)
+        .help(command.label)
     }
 
     private func directionButton(

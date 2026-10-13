@@ -52,6 +52,15 @@ extension CompanionConnection {
         }
     }
 
+    func skipPlayback(by seconds: Double) {
+        guard seconds.isFinite, seconds != 0 else { return }
+        sendRequest(eventName: "_mcc", content: .dictionary([
+            ("_mcc", .int(7)),
+            // Companion expects a floating-point interval, including for backward skips.
+            ("_skpS", .float64(seconds)),
+        ]))
+    }
+
     /// Send a double-tap: two rapid press/release cycles.
     func doubleTapButton(_ button: CompanionButton, completion: ((Swift.Error?) -> Void)? = nil) {
         sendButtonDown(button)

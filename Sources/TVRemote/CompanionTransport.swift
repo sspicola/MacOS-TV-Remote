@@ -58,19 +58,26 @@ final class CompanionTransport: RemoteTransport {
 
     func send(_ command: RemoteCommand) {
         guard let session, session.connectionStatus == .connected else { return }
-        let button: CompanionButton = switch command {
-        case .up: .up
-        case .down: .down
-        case .left: .left
-        case .right: .right
-        case .select: .select
-        case .back: .menu
-        case .home: .home
-        case .playPause: .playPause
-        case .volumeDown: .volumeDown
-        case .volumeUp: .volumeUp
-        case .wake: .wake
-        case .sleep: .sleep
+        let button: CompanionButton
+        switch command {
+        case .up: button = .up
+        case .down: button = .down
+        case .left: button = .left
+        case .right: button = .right
+        case .select: button = .select
+        case .back: button = .menu
+        case .home: button = .home
+        case .playPause: button = .playPause
+        case .volumeDown: button = .volumeDown
+        case .volumeUp: button = .volumeUp
+        case .wake: button = .wake
+        case .sleep: button = .sleep
+        case .skipBackward:
+            session.skipPlayback(by: -10)
+            return
+        case .skipForward:
+            session.skipPlayback(by: 10)
+            return
         }
         session.pressButton(button)
     }
