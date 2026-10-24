@@ -247,7 +247,13 @@ struct RemoteModelTests {
         fixture.transport.discover([livingRoom])
         fixture.model.selectDevice(id: livingRoom.id)
         fixture.model.pin = "1234"
-        try await Task.sleep(for: .milliseconds(60))
+        // The timeout task also runs on the main actor and can start late on a
+        // busy CI runner. Wait for its result, with a deadline if it never fires.
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        while fixture.model.phase == .connecting, clock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
 
         guard case .failed(let message) = fixture.model.phase else {
             Issue.record("Expected a connection timeout, got \(fixture.model.phase)")
@@ -695,6 +701,8 @@ private struct Fixture {
 private final class FakeRemoteTransport: RemoteTransport {
     var onDevicesChanged: (([RemoteDevice]) -> Void)?
     var onPhaseChanged: ((RemotePhase) -> Void)?
+    var onTextInputChanged: ((RemoteTextInput?) -> Void)?
+    var textWrites: [(text: String, id: Data, completion: (Result<Void, Error>) -> Void)] = []
     private(set) var startCount = 0
     private(set) var refreshCount = 0
     private(set) var stopCount = 0
@@ -712,6 +720,9 @@ private final class FakeRemoteTransport: RemoteTransport {
     func submitPIN(_ pin: String) { submittedPINs.append(pin) }
     func disconnect() { disconnectCount += 1 }
     func send(_ command: RemoteCommand) { commands.append(command) }
+    func replaceText(_ text: String, sessionID: Data, completion: @escaping (Result<Void, Error>) -> Void) {
+        textWrites.append((text, sessionID, completion))
+    }
     func fetchApps(completion: @escaping (Result<[RemoteApp], Error>) -> Void) {
         appFetchCompletions.append(completion)
     }
@@ -734,4 +745,153 @@ private final class FakeRemoteTransport: RemoteTransport {
     }
     func discover(_ devices: [RemoteDevice]) { onDevicesChanged?(devices) }
     func report(_ phase: RemotePhase) { onPhaseChanged?(phase) }
+}
+
+@Suite("Apple TV keyboard") @MainActor
+struct RemoteKeyboardTests {
+    private let first = RemoteTextInput(id: Data(repeating: 1, count: 16), text: "Existing search")
+    private let second = RemoteTextInput(id: Data(repeating: 2, count: 16), text: "Another field")
+
+    private func connected() -> Fixture {
+        let fixture = Fixture()
+        fixture.transport.discover([RemoteDevice(id: "one", name: "One"), RemoteDevice(id: "two", name: "Two")])
+        fixture.model.selectDevice(id: "one")
+        fixture.transport.report(.connected)
+        return fixture
+    }
+
+    @Test func focusLoadsTextWithoutWriting() {
+        let f = connected()
+        defer { f.close() }
+        f.transport.onTextInputChanged?(first)
+        #expect(f.model.isKeyboardPresented)
+        #expect(f.model.keyboardText == first.text)
+        #expect(f.transport.textWrites.isEmpty)
+        f.model.dismissKeyboard()
+        f.transport.onTextInputChanged?(first)
+        #expect(!f.model.isKeyboardPresented)
+        f.model.showKeyboard()
+        #expect(f.model.isKeyboardPresented)
+        #expect(f.transport.textWrites.isEmpty)
+    }
+
+    @Test func editsAreCoalescedAndSerialized() {
+        let f = connected()
+        defer { f.close() }
+        f.transport.onTextInputChanged?(first)
+        f.model.editKeyboardText("é 👨‍👩‍👧‍👦")
+        f.model.editKeyboardText("é 👨‍👩‍👧‍👦 search")
+        f.model.flushKeyboardInput()
+        #expect(f.transport.textWrites.count == 1)
+        #expect(f.transport.textWrites[0].text == "é 👨‍👩‍👧‍👦 search")
+        #expect(f.transport.textWrites[0].id == first.id)
+        f.model.editKeyboardText("replacement")
+        f.model.flushKeyboardInput()
+        #expect(f.transport.textWrites.count == 1)
+        f.transport.textWrites[0].completion(.success(()))
+        #expect(f.transport.textWrites.count == 2)
+        #expect(f.transport.textWrites[1].text == "replacement")
+        f.transport.textWrites[1].completion(.success(()))
+        #expect(!f.model.isSendingText)
+        #expect(f.model.keyboardError == nil)
+    }
+
+    @Test func repeatedFocusDoesNotOverwriteAnEdit() {
+        let f = connected()
+        defer { f.close() }
+        f.transport.onTextInputChanged?(first)
+        f.model.editKeyboardText("my draft")
+        f.transport.onTextInputChanged?(first)
+        #expect(f.model.keyboardText == "my draft")
+    }
+
+    @Test func deletingAllTextSendsAnEmptyReplacement() {
+        let f = connected()
+        defer { f.close() }
+        f.transport.onTextInputChanged?(first)
+        f.model.editKeyboardText("")
+        f.model.flushKeyboardInput()
+        #expect(f.transport.textWrites.map(\.text) == [""])
+    }
+
+    @Test func failedWriteCanBeRetried() {
+        let f = connected()
+        defer { f.close() }
+        f.transport.onTextInputChanged?(first)
+        f.model.editKeyboardText("new search")
+        f.model.dismissKeyboard()
+        #expect(f.transport.textWrites.count == 1)
+        f.transport.textWrites[0].completion(.failure(AppTestError("offline")))
+        #expect(f.model.isKeyboardPresented)
+        #expect(f.model.keyboardError != nil)
+        f.model.flushKeyboardInput()
+        #expect(f.transport.textWrites.count == 2)
+        f.transport.textWrites[1].completion(.success(()))
+        #expect(f.model.keyboardError == nil)
+    }
+
+    @Test func changingFieldsRejectsOldCompletions() {
+        let f = connected()
+        defer { f.close() }
+        f.transport.onTextInputChanged?(first)
+        f.model.editKeyboardText("old draft")
+        f.model.flushKeyboardInput()
+        f.model.editKeyboardText("unsent old draft")
+        f.transport.onTextInputChanged?(second)
+        f.transport.textWrites[0].completion(.failure(AppTestError("late error")))
+        f.model.flushKeyboardInput()
+        #expect(f.model.keyboardText == second.text)
+        #expect(f.model.keyboardError == nil)
+        #expect(f.model.isKeyboardPresented)
+        #expect(f.transport.textWrites.count == 1)
+        f.model.editKeyboardText("new field edit")
+        f.model.flushKeyboardInput()
+        #expect(f.transport.textWrites[1].id == second.id)
+    }
+
+    @Test("Closing, switching, disconnecting, and sleeping clear text", arguments: 0...4)
+    func teardownClearsText(action: Int) {
+        let f = connected()
+        defer { f.close() }
+        f.transport.onTextInputChanged?(first)
+        f.model.editKeyboardText("private input")
+        f.model.flushKeyboardInput()
+        f.model.editKeyboardText("pending private input")
+        switch action {
+        case 0: f.transport.onTextInputChanged?(nil)
+        case 1: f.model.selectDevice(id: "two")
+        case 2: f.transport.report(.failed("Disconnected"))
+        case 3: f.model.prepareForSleep()
+        default: f.model.stop()
+        }
+        f.transport.textWrites[0].completion(.failure(AppTestError("late")))
+        f.model.flushKeyboardInput()
+        #expect(f.model.textInput == nil)
+        #expect(f.model.keyboardText.isEmpty)
+        #expect(!f.model.isKeyboardPresented)
+        #expect(!f.model.isSendingText)
+        #expect(f.model.keyboardError == nil)
+        #expect(f.transport.textWrites.count == 1)
+        #expect(!f.preferences.dictionaryRepresentation().values.contains { ($0 as? String)?.contains("private input") == true })
+    }
+
+    @Test func automaticDebounceSendsLatestEdit() async throws {
+        let f = connected()
+        defer { f.close() }
+        f.transport.onTextInputChanged?(first)
+        f.model.editKeyboardText("s")
+        f.model.editKeyboardText("search")
+        try await Task.sleep(for: .milliseconds(250))
+        #expect(f.transport.textWrites.map(\.text) == ["search"])
+    }
+
+    @Test func focusEventsWhileDisconnectedAreIgnored() {
+        let f = Fixture()
+        defer { f.close() }
+        f.transport.onTextInputChanged?(first)
+        f.model.editKeyboardText("ignored")
+        f.model.flushKeyboardInput()
+        #expect(f.model.textInput == nil)
+        #expect(f.transport.textWrites.isEmpty)
+    }
 }

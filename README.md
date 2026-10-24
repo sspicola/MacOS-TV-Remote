@@ -1,7 +1,7 @@
 # TV Remote
 
 Control the Apple TVs in your house from your Mac's menu bar. Navigate, change
-volume, switch TVs, or open an app with one click.
+volume, switch TVs, type from your Mac, or open an app with one click.
 
 [Download TV Remote](https://github.com/sspicola/MacOS-TV-Remote/releases/latest)
 
@@ -28,13 +28,22 @@ To check a download, save its `.sha256` file in the same folder and run
 ## Use it
 
 The Remote tab has a directional pad, Select, Back, Home, play/pause, and volume
-buttons. Arrow keys navigate, Return selects, and Space toggles playback while
+buttons. The power button in the top-right corner offers Wake Apple TV and Sleep
+Apple TV. The buttons beside the directional pad skip back or forward 10 seconds
+during playback. Skipping depends on the app and whether the video allows seeking.
+Arrow keys navigate, Return selects, and Space toggles playback while
 this tab is open. Volume commands go through Apple TV to your existing TV and
 audio setup; support depends on that equipment.
 
 The Apps tab shows the selected TV's installed apps. Search by name or click a
 tile to launch it. Refresh the list after installing or removing apps on the TV.
 A checkmark means Apple TV accepted the launch request.
+
+When the selected TV opens a text field, a keyboard window appears on your Mac.
+Click it to type, paste, or edit text. Changes are sent as you type. Done closes
+the Mac window; use the remote to submit a search on the TV. You can reopen the
+window with Type on TV while that field is active. Apps with custom keyboards
+may not report a text field and will still need the directional pad.
 
 Choose another TV from the dropdown to switch rooms. TV Remote remembers the
 last connected TV and reconnects on launch or after the Mac wakes from sleep.
@@ -58,8 +67,10 @@ or a separate Sonos integration.
 ## Privacy
 
 Pairing credentials stay in your Mac's Keychain. Remote commands and installed
-app lists travel over your local network. TV Remote remembers the last TV in
-local preferences and has no account, analytics, or update-check service.
+app lists and typed text travel over your local network. TV Remote remembers the last TV in
+local preferences and has no account, analytics, or update-check service. Typed
+text is not saved or logged and is cleared when the field closes or the TV
+disconnects.
 
 When you open Apps, TV Remote requests icons from Apple's App Store using each
 app's bundle identifier and your Mac's region. It caches downloaded artwork and
@@ -90,7 +101,8 @@ open -n "build/TV Remote.app" --args --demo --preview-window
 
 The demo uses fictional rooms and does not discover or control TVs. The
 `--preview-window` flag opens a regular window for UI work; normal launches use
-the menu bar. Protocol tests require full Xcode:
+the menu bar. Add `--demo-keyboard` to the demo command to preview a simulated
+text field. Protocol tests require full Xcode:
 
 ```sh
 swift test --package-path Vendor/ItsytvCore --scratch-path .build/vendor-tests --force-resolved-versions

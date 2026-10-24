@@ -33,13 +33,23 @@ public enum RemoteScreen: String, CaseIterable, Sendable {
     case remote, apps
 }
 
+public struct RemoteTextInput: Equatable, Sendable {
+    public let id: Data
+    public let text: String
+
+    public init(id: Data, text: String) {
+        self.id = id
+        self.text = text
+    }
+}
+
 public enum AppListState: Equatable, Sendable {
     case idle, loading, loaded
     case failed(String)
 }
 
 public enum RemoteCommand: String, CaseIterable, Sendable {
-    case up, down, left, right, select, back, home, playPause, volumeDown, volumeUp
+    case up, down, left, right, select, back, home, playPause, volumeDown, volumeUp, wake, sleep, skipBackward, skipForward
 
     public var label: String {
         switch self {
@@ -53,6 +63,10 @@ public enum RemoteCommand: String, CaseIterable, Sendable {
         case .playPause: "Play / pause"
         case .volumeDown: "Volume down"
         case .volumeUp: "Volume up"
+        case .wake: "Wake Apple TV"
+        case .sleep: "Sleep Apple TV"
+        case .skipBackward: "Skip back 10 seconds"
+        case .skipForward: "Skip forward 10 seconds"
         }
     }
 }
@@ -61,6 +75,7 @@ public enum RemoteCommand: String, CaseIterable, Sendable {
 public protocol RemoteTransport: AnyObject {
     var onDevicesChanged: (([RemoteDevice]) -> Void)? { get set }
     var onPhaseChanged: ((RemotePhase) -> Void)? { get set }
+    var onTextInputChanged: ((RemoteTextInput?) -> Void)? { get set }
     func startScanning()
     func refreshScanning()
     func stopScanning()
@@ -68,6 +83,7 @@ public protocol RemoteTransport: AnyObject {
     func submitPIN(_ pin: String)
     func disconnect()
     func send(_ command: RemoteCommand)
+    func replaceText(_ text: String, sessionID: Data, completion: @escaping (Result<Void, Error>) -> Void)
     func fetchApps(completion: @escaping (Result<[RemoteApp], Error>) -> Void)
     func launchApp(bundleID: String, completion: @escaping (Result<Void, Error>) -> Void)
 }
