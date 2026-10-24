@@ -247,7 +247,13 @@ struct RemoteModelTests {
         fixture.transport.discover([livingRoom])
         fixture.model.selectDevice(id: livingRoom.id)
         fixture.model.pin = "1234"
-        try await Task.sleep(for: .milliseconds(60))
+        // The timeout task also runs on the main actor and can start late on a
+        // busy CI runner. Wait for its result, with a deadline if it never fires.
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        while fixture.model.phase == .connecting, clock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
 
         guard case .failed(let message) = fixture.model.phase else {
             Issue.record("Expected a connection timeout, got \(fixture.model.phase)")
